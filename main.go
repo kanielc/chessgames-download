@@ -17,6 +17,7 @@ import (
 )
 
 var baseUrl = "https://www.chessgames.com"
+var gameRegex = regexp.MustCompile(`pgn=\"((.|\n)+)\" ratio`)
 
 func GetGame(url string) (string, error) {
 	ctx, cancel := chromedp.NewContext(context.Background())
@@ -25,19 +26,23 @@ func GetGame(url string) (string, error) {
 	var body string
 
 	err := chromedp.Run(ctx,
-		chromedp.Navigate(url),
+		chromedp.Navigatgit e(url),
 		chromedp.OuterHTML("#olga-data", &body, chromedp.ByQuery),
 	)
 	if err != nil {
 		return "", err
 	}
 
-	m := regexp.MustCompile(`pgn=\"((.|\n)+)\" ratio`)
-	pgn := m.FindAllStringSubmatch(body, -1)
+	pgn := gameRegex.FindAllStringSubmatch(body, -1)
 
 	if len(pgn) == 0 {
 		return "", errors.New("No PGNs found")
 	}
+
+	if len(pgn[0]) < 2 {
+		return "", errors.New("No matching PGN data at game url")
+	}
+
 	return html.UnescapeString(pgn[0][1]), nil
 }
 
@@ -55,21 +60,14 @@ func GetCollection(url string) ([]string, error) {
 	m := regexp.MustCompile(`\/perl\/chessgame\?gid=\d{4,}`) // structure of game reference
 	games := m.FindAllString(body, -1)                       // pull out the list of games
 
-	var pgn []string = make([]string, len(games))
 	for i, g := range games {
-		game, err := GetGame(baseUrl + g)
-
-		if err != nil {
-			return pgn[0:i], err
-		} else {
-			pgn[i] = game
-		}
+		games[i] = baseUrl + g
 	}
 
-	return pgn, nil
+	return games, nil
 }
 
-func WriteGames(games []string, fileName string) {
+func FetchAndWriteGames(games []string, fileName string) {
 	// create/truncate file to write to
 	f, err := os.Create(fileName)
 
@@ -78,15 +76,21 @@ func WriteGames(games []string, fileName string) {
 	}
 	defer f.Close()
 
-	// write each game
 	numGames := len(games)
-
 	for i, g := range games {
-		f.WriteString(g)
+		fmt.Println(baseUrl + g)
+		game, err := GetGame(baseUrl + g)
 
-		// put spacing if multiple games
-		if i < numGames-1 {
-			f.WriteString("\n\n")
+		fmt.Println(game)
+		if err != nil {
+			log.Printf("Skipping - Failed to download %s because %s", g, err.Error())
+		} else {
+			f.WriteString(game)
+
+			// put spacing if multiple games
+			if i < numGames-1 {
+				f.WriteString("\n\n")
+			}
 		}
 	}
 }
@@ -112,13 +116,7 @@ func main() {
 	if strings.Contains(url, "chesscollection") {
 		games, err = GetCollection(url)
 	} else if strings.Contains(url, "chessgame") {
-		game, e := GetGame(url)
-
-		if e != nil {
-			err = e
-		} else {
-			games = []string{game}
-		}
+		games = []string{url}
 	} else {
 		err = errors.New("Invalid collection or game URL")
 	}
@@ -126,7 +124,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	} else {
-		WriteGames(games, *pgnPtr)
+		FetchAndWriteGames(games, *pgnPtr)
 		fmt.Printf("Wrote %d games from %s to file %s\n", len(games), url, *pgnPtr)
 	}
 }
