@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"fmt"
 	"html"
 	"io"
 	"log"
@@ -18,15 +17,15 @@ import (
 
 var baseUrl = "https://www.chessgames.com"
 var gameRegex = regexp.MustCompile(`pgn=\"((.|\n)+)\" ratio`)
+var totalWritten = 0
+var ctx context.Context
+var cancel context.CancelFunc
 
 func GetGame(url string) (string, error) {
-	ctx, cancel := chromedp.NewContext(context.Background())
-	defer cancel()
-
 	var body string
 
 	err := chromedp.Run(ctx,
-		chromedp.Navigatgit e(url),
+		chromedp.Navigate(url),
 		chromedp.OuterHTML("#olga-data", &body, chromedp.ByQuery),
 	)
 	if err != nil {
@@ -78,13 +77,13 @@ func FetchAndWriteGames(games []string, fileName string) {
 
 	numGames := len(games)
 	for i, g := range games {
-		fmt.Println(baseUrl + g)
-		game, err := GetGame(baseUrl + g)
+		game, err := GetGame(g)
 
-		fmt.Println(game)
 		if err != nil {
-			log.Printf("Skipping - Failed to download %s because %s", g, err.Error())
+			log.Printf("Skipping game %d - Failed to download %s because %s", i+1, g, err.Error())
 		} else {
+			log.Printf("Writing game %d - %s", i+1, g)
+			totalWritten++
 			f.WriteString(game)
 
 			// put spacing if multiple games
@@ -124,7 +123,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	} else {
+		ctx, cancel = chromedp.NewContext(context.Background())
+		defer cancel()
 		FetchAndWriteGames(games, *pgnPtr)
-		fmt.Printf("Wrote %d games from %s to file %s\n", len(games), url, *pgnPtr)
+		log.Printf("Wrote %d games from %s to file %s\n", totalWritten, url, *pgnPtr)
 	}
 }
