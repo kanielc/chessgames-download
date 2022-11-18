@@ -112,12 +112,13 @@ func main() {
 		log.Fatal("Invalid output PGN name (it's empty or unprovided)")
 	}
 
-	if strings.Contains(url, "chesscollection") {
-		games, err = GetCollection(url)
-	} else if strings.Contains(url, "chessgame") {
+	if strings.Contains(url, "/chessgame?") {
 		games = []string{url}
-	} else {
-		err = errors.New("Invalid collection or game URL")
+	} else if strings.Contains(url, "/chesscollection?") {
+		games, err = GetCollection(url)
+	} else { // TODO: support other endpoints, but for now, treat them like chesscollections
+		log.Println("Not a chess collection, but still searching endpoint for chessgames...")
+		games, err = GetCollection(url)
 	}
 
 	if err != nil {
