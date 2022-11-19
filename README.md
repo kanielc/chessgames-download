@@ -1,6 +1,10 @@
 # chessgames-download
 Tool to download PGN games and game collections from chessgames.com
 
+New features:
+- Treats random pages similarly to collections
+- Will now download multi-page collections as well
+
 How to use:
 .\chessgames-download.exe -url chess-collection-or-game-url -pgn local-pgn-file-to-write-to.pgn
 
