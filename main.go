@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"html"
@@ -14,38 +13,36 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/chromedp/chromedp"
+	"github.com/PuerkitoBio/goquery"
 )
 
 var baseUrl = "https://www.chessgames.com"
-var gameRegex = regexp.MustCompile(`pgn=\"((.|\n)+)\" ratio`)
 var gameUrlRegex = regexp.MustCompile(`\/perl\/chessgame\?gid=\d{4,}`) // structure of game reference
 var totalWritten = 0
 var ctx context.Context
 var cancel context.CancelFunc
 
 func GetGame(url string) (string, error) {
-	var body string
+	response, err := http.Get(url)
 
-	err := chromedp.Run(ctx,
-		chromedp.Navigate(url),
-		chromedp.OuterHTML("#olga-data", &body, chromedp.ByQuery),
-	)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("Unable to make HTTP request", err)
 	}
 
-	pgn := gameRegex.FindAllStringSubmatch(body, -1)
+	defer response.Body.Close()
 
-	if len(pgn) == 0 {
-		return "", errors.New("No PGNs found")
+	doc, err := goquery.NewDocumentFromReader(response.Body)
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	if len(pgn[0]) < 2 {
-		return "", errors.New("No matching PGN data at game url")
+	pgn, exists := doc.Find("[pgn]").First().Attr("pgn")
+
+	if !exists {
+		log.Fatal("Cannot find pgn attribute")
 	}
 
-	return html.UnescapeString(pgn[0][1]), nil
+	return html.UnescapeString(pgn), nil
 }
 
 /*
@@ -206,8 +203,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	} else {
-		ctx, cancel = chromedp.NewContext(context.Background())
-		defer cancel()
 		FetchAndWriteGames(games, *pgnPtr)
 
 		log.Printf("Wrote %d games from %s to file %s\n", totalWritten, url, *pgnPtr)
