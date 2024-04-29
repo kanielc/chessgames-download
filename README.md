@@ -2,6 +2,7 @@
 Tool to download PGN games and game collections from chessgames.com
 
 New features:
+- Adds notes in notation
 - Treats random pages similarly to collections
 - Will now download multi-page collections as well
 
@@ -9,7 +10,6 @@ How to use:
 .\chessgames-download.exe -url chess-collection-or-game-url -pgn local-pgn-file-to-write-to.pgn
 
 Example for a game collection:
-
 
 .\chessgames-download.exe -url https://www.chessgames.com/perl/chesscollection?cid=1045049 -pgn .\kings-gambit.pgn
 

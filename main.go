@@ -7,6 +7,7 @@ import (
 	"html"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"regexp"
@@ -22,11 +23,11 @@ var totalWritten = 0
 var ctx context.Context
 var cancel context.CancelFunc
 
-func GetGame(url string) (string, error) {
+func GetGame(url string) (string, string, error) {
 	response, err := http.Get(url)
 
 	if err != nil {
-		return "", fmt.Errorf("Unable to make HTTP request", err)
+		return "", "", fmt.Errorf("Unable to make HTTP request", err)
 	}
 
 	defer response.Body.Close()
@@ -42,7 +43,13 @@ func GetGame(url string) (string, error) {
 		log.Fatal("Cannot find pgn attribute")
 	}
 
-	return html.UnescapeString(pgn), nil
+	notes, ex := doc.Find("[notes]").First().Attr("notes")
+
+	if !ex {
+		log.Fatal("Cannot find pgn attribute")
+	}
+
+	return html.UnescapeString(pgn), html.UnescapeString(notes), nil
 }
 
 /*
@@ -142,6 +149,44 @@ func DedupGameList(games []string) []string {
 	return result
 }
 
+func concatNotes(game string, notes string) string {
+	// Split moveList by pereiods then by spaces
+	prevMoveList := strings.Split(strings.Join(strings.Split(strings.Split(game, "\"]\n\n")[1], ". "), " "), " ")
+	notesList := strings.Split(notes, ",")
+	concatenatedString := ""
+
+	// Remove numbers from list
+	var moveList []string
+	for i := 0; i < len(prevMoveList); i++ {
+		if _, err := strconv.Atoi(prevMoveList[i]); err != nil {
+			moveList = append(moveList, prevMoveList[i])
+		}
+	}
+
+	// Add move number once every two iterations
+	moveCounter := 1.0
+	for i := 0; i < len(moveList); i++ {
+		if math.Mod(moveCounter, 2) == 1.0 || math.Mod(moveCounter, 2) == 0 {
+			concatenatedString += strconv.FormatFloat(moveCounter, 'f', -1, 64) + ". "
+			moveCounter += 0.5
+		} else {
+			moveCounter += 0.5
+		}
+
+		// Add move and check if any notes match up there
+		concatenatedString += moveList[i] + " "
+		for n := 0; n < len(notesList); n += 2 {
+			idx, _ := strconv.Atoi(notesList[n])
+			if i == idx {
+				concatenatedString += "{" + notesList[n+1][1:][:len(notesList[n+1])-1] + "} "
+				break
+			}
+		}
+	}
+
+	return concatenatedString
+}
+
 func FetchAndWriteGames(games []string, fileName string) {
 	// create/truncate file to write to
 	f, err := os.Create(fileName)
@@ -155,14 +200,15 @@ func FetchAndWriteGames(games []string, fileName string) {
 	numGames := len(games)
 
 	for i, g := range games {
-		game, err := GetGame(g)
+		game, notes, err := GetGame(g)
 
 		if err != nil {
 			log.Printf("Skipping game %d - Failed to download %s because %s", i+1, g, err.Error())
 		} else {
 			log.Printf("Writing game %d - %s", i+1, g)
 			totalWritten++
-			f.WriteString(game)
+			gameStr := concatNotes(game, notes)
+			f.WriteString(gameStr)
 
 			// put spacing if multiple games
 			if i < numGames-1 {
