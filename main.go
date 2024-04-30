@@ -7,7 +7,6 @@ import (
 	"html"
 	"io"
 	"log"
-	"math"
 	"net/http"
 	"os"
 	"regexp"
@@ -19,6 +18,11 @@ import (
 
 var baseUrl = "https://www.chessgames.com"
 var gameUrlRegex = regexp.MustCompile(`\/perl\/chessgame\?gid=\d{4,}`) // structure of game reference
+var whiteMoves = regexp.MustCompile(`([0-9]+\. [a-zA-Z-]+[0-9]?[a-zA-Z]?[0-9]?)`)
+var whiteMovesAlt = regexp.MustCompile(`([0-9]+\.[a-zA-Z-]+[0-9]?[a-zA-Z]?[0-9]?)`)
+var blackMoves = regexp.MustCompile(`[^.] ([a-zA-Z][^ ]+) `)
+var splitNotes = regexp.MustCompile(`,"([a-zA-Z0-9!\. \-\,\'’]+)"`)
+var splitNotesNum = regexp.MustCompile(`([0-9]?[0-9]?[0-9]),"`)
 var totalWritten = 0
 var ctx context.Context
 var cancel context.CancelFunc
@@ -150,41 +154,67 @@ func DedupGameList(games []string) []string {
 }
 
 func concatNotes(game string, notes string) string {
-	// Split moveList by pereiods then by spaces
-	prevMoveList := strings.Split(strings.Join(strings.Split(strings.Split(game, "\"]\n\n")[1], ". "), " "), " ")
-	notesList := strings.Split(notes, ",")
-	concatenatedString := ""
+	/*
+	   Takes original game string, cuts off half leaving only moves
+	   Selects with Regex the white & black moves
+	   If returns nothing, retries without a space (some games have spaces between nums, some don't)
+	   Merges the two lists together placing it in, 'moveList'
+	*/
 
-	// Remove numbers from list
+	game = strings.Split(game, "\"]\n\n")[1]
+	var white = whiteMoves.FindAllStringSubmatch(game, -1)
+	var black = blackMoves.FindAllStringSubmatch(game, -1)
+
+	if len(white) == 0 {
+		white = whiteMovesAlt.FindAllStringSubmatch(game, -1)
+	}
+
+	// Merges black & white
 	var moveList []string
-	for i := 0; i < len(prevMoveList); i++ {
-		if _, err := strconv.Atoi(prevMoveList[i]); err != nil {
-			moveList = append(moveList, prevMoveList[i])
+	for i := 0; i < len(white); i++ {
+		moveList = append(moveList, white[i][0])
+
+		if len(black) > i {
+			moveList = append(moveList, black[i][1])
 		}
 	}
 
-	// Add move number once every two iterations
-	moveCounter := 1.0
-	for i := 0; i < len(moveList); i++ {
-		if math.Mod(moveCounter, 2) == 1.0 || math.Mod(moveCounter, 2) == 0 {
-			concatenatedString += strconv.FormatFloat(moveCounter, 'f', -1, 64) + ". "
-			moveCounter += 0.5
-		} else {
-			moveCounter += 0.5
-		}
+	/*
+	   Finds the text of the notes inside of the string
+	   Finds the numbers that are beside the notes
+	   Adds it to a list of notes in a pattern of 'index, note'
+	*/
 
-		// Add move and check if any notes match up there
-		concatenatedString += moveList[i] + " "
+	nlNotes := splitNotes.FindAllStringSubmatch(notes, -1)
+	nlNum := splitNotesNum.FindAllStringSubmatch(notes, -1)
+
+	var notesList []string
+	for i := 0; i < len(nlNum); i++ {
+		notesList = append(notesList, nlNum[i][1])
+
+		notesList = append(notesList, nlNotes[i][1])
+	}
+
+	/*
+	   Loops through every move
+	   Loops through every note (skipping by to to only get index)
+	   If a note matches up with a move, add it
+	*/
+
+	var concatenatedString strings.Builder
+	for i := 0; i < len(moveList); i++ {
+		concatenatedString.WriteString(moveList[i] + " ")
 		for n := 0; n < len(notesList); n += 2 {
 			idx, _ := strconv.Atoi(notesList[n])
-			if i == idx {
-				concatenatedString += "{" + notesList[n+1][1:][:len(notesList[n+1])-1] + "} "
+			if i == idx-2 || i == 0 {
+				concatenatedString.WriteString("{" + notesList[n+1] + "} ")
 				break
 			}
 		}
 	}
 
-	return concatenatedString
+	// Last part puts back in the score at the end (eg. 1-0)
+	return concatenatedString.String() + game[len(game)-3:]
 }
 
 func FetchAndWriteGames(games []string, fileName string) {
