@@ -18,8 +18,7 @@ import (
 
 var baseUrl = "https://www.chessgames.com"
 var gameUrlRegex = regexp.MustCompile(`\/perl\/chessgame\?gid=\d{4,}`) // structure of game reference
-var whiteMoves = regexp.MustCompile(`([0-9]+\. [a-zA-Z-]+[0-9]?[a-zA-Z]?[0-9]?)`)
-var whiteMovesAlt = regexp.MustCompile(`([0-9]+\.[a-zA-Z-]+[0-9]?[a-zA-Z]?[0-9]?)`)
+var whiteMoves = regexp.MustCompile(`([0-9]+\. ?[a-zA-Z-]+[0-9]?[a-zA-Z]?[0-9]?)`)
 var blackMoves = regexp.MustCompile(`[^.] ([a-zA-Z][^ ]+) `)
 var splitNotes = regexp.MustCompile(`,"([a-zA-Z0-9!\. \-\,\'’]+)"`)
 var splitNotesNum = regexp.MustCompile(`([0-9]?[0-9]?[0-9]),"`)
@@ -31,7 +30,7 @@ func GetGame(url string) (string, string, error) {
 	response, err := http.Get(url)
 
 	if err != nil {
-		return "", "", fmt.Errorf("Unable to make HTTP request", err)
+		return "", "", fmt.Errorf("Unable to make HTTP request: %s", err)
 	}
 
 	defer response.Body.Close()
@@ -153,23 +152,19 @@ func DedupGameList(games []string) []string {
 	return result
 }
 
-func concatNotes(game string, notes string) string {
+func ConcatNotes(game string, notes string) string {
 	/*
 	   Takes original game string, cuts off half leaving only moves
 	   Selects with Regex the white & black moves
-	   If returns nothing, retries without a space (some games have spaces between nums, some don't)
 	   Merges the two lists together placing it in, 'moveList'
 	*/
 
+	ogGame := game
 	game = strings.Split(game, "\"]\n\n")[1]
 
 	if notes != "[]" {
 		var white = whiteMoves.FindAllStringSubmatch(game, -1)
 		var black = blackMoves.FindAllStringSubmatch(game, -1)
-
-		if len(white) == 0 {
-			white = whiteMovesAlt.FindAllStringSubmatch(game, -1)
-		}
 
 		// Merges black & white
 		var moveList []string
@@ -193,7 +188,6 @@ func concatNotes(game string, notes string) string {
 		var notesList []string
 		for i := 0; i < len(nlNum); i++ {
 			notesList = append(notesList, nlNum[i][1])
-
 			notesList = append(notesList, nlNotes[i][1])
 		}
 
@@ -208,16 +202,18 @@ func concatNotes(game string, notes string) string {
 			concatenatedString.WriteString(moveList[i] + " ")
 			for n := 0; n < len(notesList); n += 2 {
 				idx, _ := strconv.Atoi(notesList[n])
-				if i == idx-2 || i == 0 {
+				if i == idx {
 					concatenatedString.WriteString("{" + notesList[n+1] + "} ")
 					break
 				}
 			}
 		}
+
+		return strings.Split(ogGame, "\"]\n\n")[0] + "\"]\n\n" + concatenatedString.String() + ogGame[len(ogGame)-3:]
 	}
 
 	// Last part puts back in the score at the end (eg. 1-0)
-	return game
+	return ogGame
 }
 
 func FetchAndWriteGames(games []string, fileName string) {
@@ -240,7 +236,7 @@ func FetchAndWriteGames(games []string, fileName string) {
 		} else {
 			log.Printf("Writing game %d - %s", i+1, g)
 			totalWritten++
-			gameStr := concatNotes(game, notes)
+			gameStr := ConcatNotes(game, notes)
 			f.WriteString(gameStr)
 
 			// put spacing if multiple games
