@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-var basicGame = "1. e4 e5 2.Nf3 Nc6"
+var basicGame = "[PlyCount \"47\"]\n\n1. e4 e5 2.Nf3 Nc6 1-0"
 
 func TestEmptyNotes(t *testing.T) {
 	// empty
@@ -18,7 +18,7 @@ func TestEmptyNotes(t *testing.T) {
 func TestBasicNote(t *testing.T) {
 	res := ConcatNotes(basicGame, "[0,\"nice game\"]")
 
-	expected := "1. e4 {nice game} e5 2.Nf3 Nc6"
+	expected := "[PlyCount \"47\"]\n\n1. e4 {nice game} e5 2.Nf3 Nc6 1-0"
 	if res != expected {
 		t.Fatalf("Notes not properly included in game at move 0, got instead %s", res)
 	}
