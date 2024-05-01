@@ -18,8 +18,7 @@ import (
 
 var baseUrl = "https://www.chessgames.com"
 var gameUrlRegex = regexp.MustCompile(`\/perl\/chessgame\?gid=\d{4,}`) // structure of game reference
-var whiteMoves = regexp.MustCompile(`([0-9]+\. [a-zA-Z-]+[0-9]?[a-zA-Z]?[0-9]?)`)
-var whiteMovesAlt = regexp.MustCompile(`([0-9]+\.[a-zA-Z-]+[0-9]?[a-zA-Z]?[0-9]?)`)
+var whiteMoves = regexp.MustCompile(`([0-9]+\. ?[a-zA-Z-]+[0-9]?[a-zA-Z]?[0-9]?)`)
 var blackMoves = regexp.MustCompile(`[^.] ([a-zA-Z][^ ]+) `)
 var splitNotes = regexp.MustCompile(`,"([a-zA-Z0-9!\. \-\,\'’]+)"`)
 var splitNotesNum = regexp.MustCompile(`([0-9]?[0-9]?[0-9]),"`)
@@ -161,15 +160,12 @@ func concatNotes(game string, notes string) string {
 	   Merges the two lists together placing it in, 'moveList'
 	*/
 
+	ogGame := game
 	game = strings.Split(game, "\"]\n\n")[1]
 
 	if notes != "[]" {
 		var white = whiteMoves.FindAllStringSubmatch(game, -1)
 		var black = blackMoves.FindAllStringSubmatch(game, -1)
-
-		if len(white) == 0 {
-			white = whiteMovesAlt.FindAllStringSubmatch(game, -1)
-		}
 
 		// Merges black & white
 		var moveList []string
@@ -214,10 +210,12 @@ func concatNotes(game string, notes string) string {
 				}
 			}
 		}
+
+		return strings.Split(ogGame, "\"]\n\n")[0] + "\"]\n\n" + concatenatedString.String() + ogGame[len(ogGame)-3:]
 	}
 
 	// Last part puts back in the score at the end (eg. 1-0)
-	return game
+	return ogGame
 }
 
 func FetchAndWriteGames(games []string, fileName string) {
