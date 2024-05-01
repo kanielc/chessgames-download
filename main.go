@@ -18,15 +18,20 @@ import (
 
 var baseUrl = "https://www.chessgames.com"
 var gameUrlRegex = regexp.MustCompile(`\/perl\/chessgame\?gid=\d{4,}`) // structure of game reference
+var whiteMoves = regexp.MustCompile(`([0-9]+\. [a-zA-Z-]+[0-9]?[a-zA-Z]?[0-9]?)`)
+var whiteMovesAlt = regexp.MustCompile(`([0-9]+\.[a-zA-Z-]+[0-9]?[a-zA-Z]?[0-9]?)`)
+var blackMoves = regexp.MustCompile(`[^.] ([a-zA-Z][^ ]+) `)
+var splitNotes = regexp.MustCompile(`,"([a-zA-Z0-9!\. \-\,\'’]+)"`)
+var splitNotesNum = regexp.MustCompile(`([0-9]?[0-9]?[0-9]),"`)
 var totalWritten = 0
 var ctx context.Context
 var cancel context.CancelFunc
 
-func GetGame(url string) (string, error) {
+func GetGame(url string) (string, string, error) {
 	response, err := http.Get(url)
 
 	if err != nil {
-		return "", fmt.Errorf("Unable to make HTTP request", err)
+		return "", "", fmt.Errorf("Unable to make HTTP request", err)
 	}
 
 	defer response.Body.Close()
@@ -42,7 +47,13 @@ func GetGame(url string) (string, error) {
 		log.Fatal("Cannot find pgn attribute")
 	}
 
-	return html.UnescapeString(pgn), nil
+	notes, ex := doc.Find("[notes]").First().Attr("notes")
+
+	if !ex {
+		log.Fatal("Cannot find pgn attribute")
+	}
+
+	return html.UnescapeString(pgn), html.UnescapeString(notes), nil
 }
 
 /*
@@ -142,6 +153,73 @@ func DedupGameList(games []string) []string {
 	return result
 }
 
+func concatNotes(game string, notes string) string {
+	/*
+	   Takes original game string, cuts off half leaving only moves
+	   Selects with Regex the white & black moves
+	   If returns nothing, retries without a space (some games have spaces between nums, some don't)
+	   Merges the two lists together placing it in, 'moveList'
+	*/
+
+	game = strings.Split(game, "\"]\n\n")[1]
+
+	if notes != "[]" {
+		var white = whiteMoves.FindAllStringSubmatch(game, -1)
+		var black = blackMoves.FindAllStringSubmatch(game, -1)
+
+		if len(white) == 0 {
+			white = whiteMovesAlt.FindAllStringSubmatch(game, -1)
+		}
+
+		// Merges black & white
+		var moveList []string
+		for i := 0; i < len(white); i++ {
+			moveList = append(moveList, white[i][0])
+
+			if len(black) > i {
+				moveList = append(moveList, black[i][1])
+			}
+		}
+
+		/*
+			Finds the text of the notes inside of the string
+			Finds the numbers that are beside the notes
+			Adds it to a list of notes in a pattern of 'index, note'
+		*/
+
+		nlNotes := splitNotes.FindAllStringSubmatch(notes, -1)
+		nlNum := splitNotesNum.FindAllStringSubmatch(notes, -1)
+
+		var notesList []string
+		for i := 0; i < len(nlNum); i++ {
+			notesList = append(notesList, nlNum[i][1])
+
+			notesList = append(notesList, nlNotes[i][1])
+		}
+
+		/*
+			Loops through every move
+			Loops through every note (skipping by to to only get index)
+			If a note matches up with a move, add it
+		*/
+
+		var concatenatedString strings.Builder
+		for i := 0; i < len(moveList); i++ {
+			concatenatedString.WriteString(moveList[i] + " ")
+			for n := 0; n < len(notesList); n += 2 {
+				idx, _ := strconv.Atoi(notesList[n])
+				if i == idx-2 || i == 0 {
+					concatenatedString.WriteString("{" + notesList[n+1] + "} ")
+					break
+				}
+			}
+		}
+	}
+
+	// Last part puts back in the score at the end (eg. 1-0)
+	return game
+}
+
 func FetchAndWriteGames(games []string, fileName string) {
 	// create/truncate file to write to
 	f, err := os.Create(fileName)
@@ -155,14 +233,15 @@ func FetchAndWriteGames(games []string, fileName string) {
 	numGames := len(games)
 
 	for i, g := range games {
-		game, err := GetGame(g)
+		game, notes, err := GetGame(g)
 
 		if err != nil {
 			log.Printf("Skipping game %d - Failed to download %s because %s", i+1, g, err.Error())
 		} else {
 			log.Printf("Writing game %d - %s", i+1, g)
 			totalWritten++
-			f.WriteString(game)
+			gameStr := concatNotes(game, notes)
+			f.WriteString(gameStr)
 
 			// put spacing if multiple games
 			if i < numGames-1 {
