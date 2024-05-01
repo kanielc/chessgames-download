@@ -10,7 +10,7 @@
             "mode": "auto",
             "program": "${fileDirname}",
             "env": {},
-            "args": ["-pgn", "test2.pgn", "-url", "https://www.chessgames.com/perl/chessgame?gid=1523845"] 
+            "args": ["-pgn", "test2.pgn", "-url", "https://www.chessgames.com/perl/chessgame?gid=1039803"] 
         },
         {
             "name": "chessgames-download-test",

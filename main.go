@@ -160,9 +160,13 @@ func ConcatNotes(game string, notes string) string {
 	*/
 
 	ogGame := game
-	game = strings.Split(game, "\"]\n\n")[1]
 
 	if notes != "[]" {
+		split := strings.Split(game, "\"]\n\n")
+		
+		if len(split) > 1 {
+			game = split[1]
+		}
 		var white = whiteMoves.FindAllStringSubmatch(game, -1)
 		var black = blackMoves.FindAllStringSubmatch(game, -1)
 
