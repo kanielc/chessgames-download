@@ -31,7 +31,7 @@ func GetGame(url string) (string, string, error) {
 	response, err := http.Get(url)
 
 	if err != nil {
-		return "", "", fmt.Errorf("Unable to make HTTP request", err)
+		return "", "", fmt.Errorf("Unable to make HTTP request: %s", err)
 	}
 
 	defer response.Body.Close()
@@ -153,15 +153,14 @@ func DedupGameList(games []string) []string {
 	return result
 }
 
-func concatNotes(game string, notes string) string {
+func ConcatNotes(game string, notes string) string {
 	/*
 	   Takes original game string, cuts off half leaving only moves
 	   Selects with Regex the white & black moves
-	   If returns nothing, retries without a space (some games have spaces between nums, some don't)
 	   Merges the two lists together placing it in, 'moveList'
 	*/
 
-	game = strings.Split(game, "\"]\n\n")[1]
+	//game = strings.Split(game, "\"]\n\n")[1]
 
 	if notes != "[]" {
 		var white = whiteMoves.FindAllStringSubmatch(game, -1)
@@ -193,7 +192,6 @@ func concatNotes(game string, notes string) string {
 		var notesList []string
 		for i := 0; i < len(nlNum); i++ {
 			notesList = append(notesList, nlNum[i][1])
-
 			notesList = append(notesList, nlNotes[i][1])
 		}
 
@@ -208,12 +206,14 @@ func concatNotes(game string, notes string) string {
 			concatenatedString.WriteString(moveList[i] + " ")
 			for n := 0; n < len(notesList); n += 2 {
 				idx, _ := strconv.Atoi(notesList[n])
-				if i == idx-2 || i == 0 {
+				if i == idx {
 					concatenatedString.WriteString("{" + notesList[n+1] + "} ")
 					break
 				}
 			}
 		}
+
+		game = concatenatedString.String()
 	}
 
 	// Last part puts back in the score at the end (eg. 1-0)
@@ -240,7 +240,7 @@ func FetchAndWriteGames(games []string, fileName string) {
 		} else {
 			log.Printf("Writing game %d - %s", i+1, g)
 			totalWritten++
-			gameStr := concatNotes(game, notes)
+			gameStr := ConcatNotes(game, notes)
 			f.WriteString(gameStr)
 
 			// put spacing if multiple games
