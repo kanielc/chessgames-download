@@ -20,7 +20,7 @@ var baseUrl = "https://www.chessgames.com"
 var gameUrlRegex = regexp.MustCompile(`\/perl\/chessgame\?gid=\d{4,}`) // structure of game reference
 var whiteMoves = regexp.MustCompile(`([0-9]+\. ?[a-zA-Z-]+[0-9]?[a-zA-Z]?[0-9]?)`)
 var blackMoves = regexp.MustCompile(`[^.] ([a-zA-Z][^ ]+) `)
-var splitNotes = regexp.MustCompile(`,"([a-zA-Z0-9!\. \-\,\'’]+)"`)
+var splitNotes = regexp.MustCompile(`,(?<!\\)"((?:[^"]|(?<=\\)")+)(?<!\\)"`)
 var splitNotesNum = regexp.MustCompile(`([0-9]?[0-9]?[0-9]),"`)
 var totalWritten = 0
 var ctx context.Context
@@ -163,7 +163,7 @@ func ConcatNotes(game string, notes string) string {
 
 	if notes != "[]" {
 		split := strings.Split(game, "\"]\n\n")
-		
+
 		if len(split) > 1 {
 			game = split[1]
 		}
