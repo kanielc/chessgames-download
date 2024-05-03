@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"html"
+	"strings"
 	"testing"
 )
 
@@ -46,5 +46,11 @@ func TestComplexGame1(t *testing.T) {
 
 	res := ConcatNotes(game, notes)
 
-	fmt.Println(res)
+	if !strings.Contains(res, "Notes by") {
+		t.Fatalf("Unable to find initial comment in final game text")
+	}
+
+	if !strings.Contains(res, "followed by Ra6") {
+		t.Fatalf("Unable to find last comment in final game text")
+	}
 }
